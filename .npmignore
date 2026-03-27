@@ -1,0 +1,13 @@
+# Keep local/dev files out of npm tarball
+.git
+.github
+node_modules
+npm-debug.log*
+*.tgz
+.vscode
+.env
+.gitignore
+src/
+tsconfig.json
+*.spec.ts
+*.test.ts
