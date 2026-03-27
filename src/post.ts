@@ -132,13 +132,6 @@ export class Post {
   section_chosen: boolean;
   write_comment_permissions: string;
 
-  // TypeScript convenience fields retained for backwards compatibility.
-  type: string;
-  publish_to: string[];
-  byline: string;
-  image_url: string | null;
-  image_upload_id: string | null;
-
   constructor(
     title: string = "",
     subtitle: string = "",
@@ -155,45 +148,14 @@ export class Post {
     this.section_chosen = true;
     this.write_comment_permissions =
       write_comment_permissions !== null ? write_comment_permissions : this.audience;
-
-    this.type = "markdown";
-    this.publish_to = [];
-    this.byline = "";
-    this.image_url = null;
-    this.image_upload_id = null;
   }
 
-  get title(): string {
-    return this.draft_title;
-  }
-
-  set title(value: string) {
-    this.draft_title = value;
-  }
-
-  get subtitle(): string {
-    return this.draft_subtitle;
-  }
-
-  set subtitle(value: string) {
-    this.draft_subtitle = value;
-  }
-
-  get content(): ContentItem[] {
-    return this.draft_body.content;
-  }
-
-  set content(value: ContentItem[]) {
-    this.draft_body.content = value;
-  }
-
-  set_section(name: string, sections: Array<Record<string, any>>): this {
+  set_section(name: string, sections: Array<Record<string, any>>): void {
     const section = sections.filter((s) => s.name === name);
     if (section.length !== 1) {
       throw new SectionNotExistsException(name);
     }
     this.draft_section_id = section[0].id;
-    return this;
   }
 
   add(item: Record<string, any>): this {
@@ -338,10 +300,10 @@ export class Post {
     return this;
   }
 
-  add_complex_text(text: string | InlineToken[]): this {
+  add_complex_text(text: string | InlineToken[]): void {
     if (typeof text === "string") {
       this.text(text);
-      return this;
+      return;
     }
 
     for (const chunk of text) {
@@ -349,7 +311,6 @@ export class Post {
         this.text(chunk.content || "").marks(chunk.marks || []);
       }
     }
-    return this;
   }
 
   marks(marks: Array<Record<string, any>>): this {
@@ -372,16 +333,23 @@ export class Post {
     return this;
   }
 
-  remove_last_paragraph(): this {
+  remove_last_paragraph(): void {
     this.draft_body.content.pop();
-    return this;
   }
 
   get_draft(): Record<string, any> {
-    return {
-      ...this,
-      draft_body: JSON.stringify(this.draft_body)
+    const out = {
+      draft_title: this.draft_title,
+      draft_subtitle: this.draft_subtitle,
+      draft_body: this.draft_body,
+      draft_bylines: this.draft_bylines,
+      audience: this.audience,
+      draft_section_id: this.draft_section_id,
+      section_chosen: this.section_chosen,
+      write_comment_permissions: this.write_comment_permissions
     };
+    out.draft_body = JSON.stringify(out.draft_body) as any;
+    return out;
   }
 
   subscribe_with_caption(message: string | null = null): this {
@@ -631,106 +599,5 @@ export class Post {
     }
 
     return this;
-  }
-
-  setTitle(title: string): this {
-    this.draft_title = title;
-    return this;
-  }
-
-  setSubtitle(subtitle: string): this {
-    this.draft_subtitle = subtitle;
-    return this;
-  }
-
-  setImage(url: string): this {
-    this.image_url = url;
-    return this;
-  }
-
-  setPublishTo(sections: string[]): this {
-    this.publish_to = sections;
-    return this;
-  }
-
-  setByline(byline: string): this {
-    this.byline = byline;
-    return this;
-  }
-
-  image(altText: string, url: string): this {
-    return this.add({ type: "captionedImage", src: url, alt: altText });
-  }
-
-  bulletList(items: string[]): this {
-    const content = items.map((item) => ({
-      type: "list_item",
-      content: [{ type: "paragraph", content: parseInline(item) }]
-    }));
-    this.draft_body.content.push({ type: "bullet_list", content } as ContentItem);
-    return this;
-  }
-
-  orderedList(items: string[]): this {
-    const content = items.map((item) => ({
-      type: "list_item",
-      content: [{ type: "paragraph", content: parseInline(item) }]
-    }));
-    this.draft_body.content.push({ type: "ordered_list", content } as ContentItem);
-    return this;
-  }
-
-  codeBlock(code: string, language: string = ""): this {
-    const attrs = language ? { language } : {};
-    return this.add({ type: "codeBlock", content: code, attrs });
-  }
-
-  async fromMarkdown(markdown: string, api?: Api): Promise<this> {
-    return this.from_markdown(markdown, api);
-  }
-
-  getDraft(): Record<string, any> {
-    return this.get_draft();
-  }
-
-  toDraft(): Record<string, any> {
-    const draftData: Record<string, any> = {
-      title: this.draft_title,
-      subtitle: this.draft_subtitle,
-      body: {
-        version: 1,
-        type: "doc",
-        content: this.draft_body.content
-      },
-      type: this.type,
-      audience: this.audience,
-      write_comment_permissions: this.write_comment_permissions
-    };
-
-    if (this.publish_to.length > 0) {
-      draftData.publish_to = this.publish_to;
-    }
-
-    if (this.byline) {
-      draftData.byline = this.byline;
-    }
-
-    if (this.image_url) {
-      draftData.image_url = this.image_url;
-    }
-
-    if (this.image_upload_id) {
-      draftData.image_upload_id = this.image_upload_id;
-    }
-
-    if (this.draft_bylines.length > 0) {
-      draftData.draft_bylines = this.draft_bylines;
-    }
-
-    if (this.draft_section_id !== null) {
-      draftData.draft_section_id = this.draft_section_id;
-    }
-
-    return draftData;
   }
 }

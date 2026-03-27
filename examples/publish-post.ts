@@ -1,76 +1,42 @@
 "use strict";
 
+import "dotenv/config";
 import fs from "fs";
 import path from "path";
+import YAML from "yaml";
 import { Api, Post } from "../src";
 
 interface PostDefinition {
   title?: string;
   subtitle?: string;
-  body?: string;
-  markdown_file?: string;
-  byline?: string;
-  image?: string;
+  audience?: string;
+  write_comment_permissions?: string;
+  section?: string;
+  body?: Record<string, any>;
+  search_engine_title?: string;
+  search_engine_description?: string;
+  slug?: string;
+  tags?: string[];
   publish?: boolean;
-}
-
-// Basic YAML parser for post definitions
-function parseYaml(content: string): PostDefinition {
-  const result: PostDefinition = {};
-  const lines = content.split("\n");
-
-  for (const line of lines) {
-    if (!line.trim() || line.trim().startsWith("#")) {
-      continue;
-    }
-
-    const [key, ...valueParts] = line.split(":");
-    const value = valueParts.join(":").trim();
-
-    if (!key || !value) {
-      continue;
-    }
-
-    const cleanKey = key.trim();
-    const cleanValue = value.replace(/^["']|["']$/g, "");
-
-    if (cleanKey === "title") {
-      result.title = cleanValue;
-    } else if (cleanKey === "subtitle") {
-      result.subtitle = cleanValue;
-    } else if (cleanKey === "body") {
-      result.body = cleanValue;
-    } else if (cleanKey === "markdown_file") {
-      result.markdown_file = cleanValue;
-    } else if (cleanKey === "byline") {
-      result.byline = cleanValue;
-    } else if (cleanKey === "image") {
-      result.image = cleanValue;
-    } else if (cleanKey === "publish") {
-      result.publish = cleanValue.toLowerCase() === "true";
-    }
-  }
-
-  return result;
 }
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  let postFile: string | null = null;
+  let postFile: string = "draft.yaml";
   let publish = false;
+  let cookiesArg: string | null = null;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "-p" || args[i] === "--post") {
-      postFile = args[i + 1];
+      postFile = args[i + 1] || postFile;
       i++;
     } else if (args[i] === "--publish") {
-      publish = true;
+      // Mirrors the current Python script where --publish uses action="store_false".
+      publish = false;
+    } else if (args[i] === "--cookies") {
+      cookiesArg = args[i + 1] || null;
+      i++;
     }
-  }
-
-  if (!postFile) {
-    console.error("Usage: npm run example:yaml -- -p <post_file.yaml> [--publish]");
-    process.exit(1);
   }
 
   const sourceFile = path.resolve(process.cwd(), postFile);
@@ -80,74 +46,87 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const email = process.env.SUBSTACK_EMAIL || process.env.SUBSTACK_USER;
-  const password = process.env.SUBSTACK_PASSWORD;
+  const email = process.env.EMAIL || process.env.SUBSTACK_EMAIL || process.env.SUBSTACK_USER;
+  const password = process.env.PASSWORD || process.env.SUBSTACK_PASSWORD;
+  const cookies_path = cookiesArg || process.env.COOKIES_PATH || null;
+  const cookies_string = process.env.COOKIES_STRING || null;
+  const publication_url = process.env.PUBLICATION_URL || process.env.SUBSTACK_PUBLICATION_URL || null;
 
-  if (!email || !password) {
+  if (!cookies_path && !cookies_string && (!email || !password)) {
     console.error(
-      "Missing SUBSTACK_EMAIL (or SUBSTACK_USER) and SUBSTACK_PASSWORD environment variables"
+      "Missing credentials. Set EMAIL and PASSWORD, or COOKIES_PATH, or COOKIES_STRING. PUBLICATION_URL is optional."
     );
     process.exit(1);
   }
 
   try {
-    const api = new Api({ email, password });
+    const api = new Api({
+      email: cookies_path || cookies_string ? null : email,
+      password: cookies_path || cookies_string ? null : password,
+      cookies_path,
+      cookies_string,
+      publication_url
+    });
     await api.ready;
 
     const postYaml = fs.readFileSync(sourceFile, "utf8");
-    const postDef = parseYaml(postYaml);
+    const postDoc = YAML.parseDocument(postYaml, { uniqueKeys: false });
+    const postDef = (postDoc.toJS() || {}) as PostDefinition;
 
-    const post = new Post();
+    const userId = await api.get_user_id();
 
-    if (postDef.title) {
-      post.setTitle(postDef.title);
-    }
+    const post = new Post(
+      postDef.title || "",
+      postDef.subtitle || "",
+      userId,
+      postDef.audience || "everyone",
+      postDef.write_comment_permissions || "everyone"
+    );
 
-    if (postDef.subtitle) {
-      post.setSubtitle(postDef.subtitle);
-    }
+    const bodyNode: any = postDoc.get("body", true);
+    const orderedBodyEntries: Array<[string, any]> =
+      bodyNode && Array.isArray(bodyNode.items)
+        ? bodyNode.items.map((pair: any) => [
+            String(pair?.key?.value ?? pair?.key ?? ""),
+            pair?.value?.toJSON ? pair.value.toJSON() : pair?.value
+          ])
+        : Object.entries(postDef.body || {});
 
-    if (postDef.byline) {
-      post.setByline(postDef.byline);
-    }
-
-    if (postDef.image) {
-      const imagePath = path.resolve(path.dirname(sourceFile), postDef.image);
-      if (fs.existsSync(imagePath)) {
-        const uploadedImage = await api.get_image(imagePath);
-        post.setImage(uploadedImage.image_url);
-        console.log(`Image uploaded: ${uploadedImage.image_url}`);
-      } else {
-        console.warn(`Image not found: ${imagePath}`);
-        post.setImage(postDef.image);
+    for (const [, rawItem] of orderedBodyEntries) {
+      const item = { ...(rawItem as Record<string, any>) };
+      if (item.type === "captionedImage") {
+        const image = await api.get_image(item.src);
+        item.src = image.url || image.image_url || item.src;
       }
+      post.add(item);
     }
 
-    if (postDef.markdown_file) {
-      const mdPath = path.resolve(path.dirname(sourceFile), postDef.markdown_file);
-      if (fs.existsSync(mdPath)) {
-        const markdownContent = fs.readFileSync(mdPath, "utf8");
-        await post.fromMarkdown(markdownContent, api);
-      } else {
-        console.error(`Markdown file not found: ${mdPath}`);
-        process.exit(1);
-      }
-    } else if (postDef.body) {
-      post.paragraph(postDef.body);
-    }
+    console.log(`Title: ${post.draft_title}`);
+    console.log(`Content blocks: ${post.draft_body.content.length}`);
 
-    console.log(`Title: ${post.title}`);
-    console.log(`Content blocks: ${post.content.length}`);
+    const draft = await api.post_draft(post.get_draft());
 
-    if (publish || postDef.publish) {
-      const draft = await api.post_draft(post.toDraft());
-      console.log(`Draft created with ID: ${draft.id}`);
+    const putDraftKwargs: Record<string, any> = {
+      draft_section_id: post.draft_section_id,
+      search_engine_title: postDef.search_engine_title,
+      search_engine_description: postDef.search_engine_description,
+      slug: postDef.slug
+    };
+
+    const filteredPutDraftKwargs = Object.fromEntries(
+      Object.entries(putDraftKwargs).filter(([, value]) => value !== null && value !== undefined)
+    );
+
+    await api.put_draft(draft.id, filteredPutDraftKwargs);
+    await api.add_tags_to_post(draft.id, postDef.tags || []);
+
+    if (publish) {
+      await api.prepublish_draft(draft.id);
       const published = await api.publish_draft(draft.id);
       console.log("Post published!");
       console.log(JSON.stringify(published, null, 2));
     } else {
-      console.log("Draft object (not published):");
-      console.log(JSON.stringify(post.toDraft(), null, 2));
+      console.log(`Draft created with ID: ${draft.id}`);
     }
   } catch (error) {
     console.error("Error:", error instanceof Error ? error.message : String(error));

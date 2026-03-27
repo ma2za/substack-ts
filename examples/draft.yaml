@@ -1,80 +1,53 @@
-# Example Substack Post Configuration (YAML)
-# 
-# This file defines a complete Substack post that can be published using:
-#   node examples/publish-post.js -p examples/draft.yaml --publish
-
-title: "Hello from substack-js"
-subtitle: "A post created from YAML configuration"
-
-# Access control (optional)
-audience: "everyone"  # "everyone" | "only_paid" | "founding" | "only_free"
-write_comment_permissions: "everyone"  # "none" | "only_paid" | "everyone"
-
-# SEO metadata (optional)
-search_engine_title: "Hello from substack-js - A YAML Example"
-search_engine_description: "Learn how to publish Substack posts programmatically using YAML configuration"
-
-# URL slug (optional)
-slug: "hello-from-yaml"
-
-# Tags to apply to the post (optional)
+title:
+  "How to publish a Substack post using the Python API"
+subtitle:
+  "This post was published using the Python API"
+audience:
+  "everyone" # everyone, only_paid, founding, only_free
+write_comment_permissions:
+  "none" # none, only_paid, everyone
+search_engine_title:
+  "This is a short SEO title set via the Python API wrapper."
+search_engine_description:
+  "This is a short SEO description set via the Python API wrapper."
+slug:
+  "this-is-a-draft-post-3"
+section:
+  "rick"
 tags:
-  - substack-js
-  - yaml
-  - example
-
-# Post body content (optional)
-# Each item represents a content block with a unique key
+  - "python"
+  - "api"
 body:
-  intro:
+  0:
+    type: "heading"
+    level: 1
+    content: "Steps"
+  1:
+    type: "paragraph"
+    content: "1)"
+    marks:
+      - type: "strong"
+      - type: "em"
+  2:
     type: "paragraph"
     content:
-      - content: "This post was created from a YAML configuration file using "
-      - content: "substack-js"
+      - content: "hello"
         marks:
           - type: "strong"
-      - content: "."
-
-  heading:
-    type: "heading"
-    content:
-      - content: "Supported Content Types"
-    level: 2
-
-  code_section:
-    type: "heading"
-    content:
-      - content: "Code Example"
-    level: 3
-
-  code:
-    type: "codeBlock"
-    content: |
-      // Create a post from YAML
-      const post = new Post("Title", "Subtitle", userId);
-      post.add({
-        type: "paragraph",
-        content: [{ content: "Hello world" }]
-      });
-      await api.post_draft(post.get_draft());
-    attrs:
-      language: "javascript"
-
-  quote_section:
-    type: "heading"
-    content:
-      - content: "Why YAML?"
-    level: 3
-
-  quote:
+          - type: "em"
+      - content: ", how are you?"
+  10:
     type: "paragraph"
-    content:
-      - content: "YAML is human-readable and makes it easy to version control your posts."
-
-  closing:
+    content: "my friend"
+  3:
+    type: "horizontal_rule"
+  4:
     type: "paragraph"
-    content:
-      - content: "Try publishing this post to see it in action!"
+    content: "2)"
+  5:
+    type: "captionedImage"
+    src: "https://media.tenor.com/7B4jMa-a7bsAAAAC/i-am-batman.gif"
+  6:
     type: "paragraph"
     content: "Set the EMAIL, PASSWORD, PUBLICATION_URL and USER_ID environment variables."
   7:

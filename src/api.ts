@@ -127,20 +127,12 @@ export class Api {
       userPublication = await this.get_user_primary_publication();
     }
 
-    if (!userPublication) {
-      throw new SubstackRequestException("Could not resolve target publication");
-    }
-
-    await this.change_publication(userPublication);
+    await this.change_publication(userPublication as Publication);
   }
 
   static _handle_response({ statusCode, text }: { statusCode: number; text: string }): any {
     if (!(statusCode >= 200 && statusCode < 300)) {
       throw new SubstackAPIException(statusCode, text);
-    }
-
-    if (!text) {
-      return {};
     }
 
     try {
@@ -527,7 +519,6 @@ export class Api {
   }
 
   async call(endpoint: string, method: string, params: Record<string, any> = {}): Promise<any> {
-    const endpointPath = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
-    return this._request(method, `${this.publication_url}/${endpointPath}`, { params });
+    return this._request(method, `${this.publication_url}/${endpoint}`, { params });
   }
 }
